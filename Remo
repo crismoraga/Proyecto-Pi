@@ -1,0 +1,148 @@
+# Generic imports
+import time
+import os
+import re
+
+# Dialogflow setup
+import aiy.voice.tts 
+import dialogflow_v2 as dialogflow
+
+session_client = dialogflow.SessionsClient()
+session = session_client.session_path('xxxx', 12345)
+
+# Servo setup
+from gpiozero import Servo
+rightEyebrowServo = Servo(26) 
+leftEyebrowServo = Servo(24)
+
+#Ted's custom functions
+def getDialogResponse(text):
+
+    text_input = dialogflow.types.TextInput(text=text, language_code='EN')
+
+    query_input = dialogflow.types.QueryInput(text=text_input)
+
+    response = session_client.detect_intent(session=session, query_input=query_input)
+
+    text = response.query_result.fulfillment_text
+
+    return response
+
+def say(test):
+    aiy.voice.tts.say(test, lang='en-US', volume=15, pitch=20, speed=80, device='default')
+
+def angry():
+    rightEyebrowServo.min()
+    leftEyebrowServo.max()
+
+def neutral():
+    rightEyebrowServo.mid()
+    leftEyebrowServo.mid()
+
+def sad():
+    rightEyebrowServo.max()
+    leftEyebrowServo.min()
+
+def sceptic():
+    rightEyebrowServo.mid()
+    leftEyebrowServo.max()
+
+def frisky():
+    neutral()
+    time.sleep(0.1)
+    for i in range(5):
+        angry()
+        time.sleep(0.1)
+        sad()
+        time.sleep(0.1)
+    neutral()
+
+def testEmotions():
+
+    say("Angry")
+    angry()
+    time.sleep(2)
+
+    say("Neutral")
+    neutral()
+    time.sleep(2)
+
+    say("Sad")
+    sad()
+    time.sleep(2)
+
+    say("sceptic")
+    sceptic()
+    time.sleep(2)
+
+    say("frisky")
+    frisky()
+    time.sleep(2)
+
+# example for adding a custom chat handler
+main_chat_handler = None
+
+
+# Reboot function, to be added to the extended chat commands.
+def reboot(*args):
+    os.system('sudo shutdown -r now')
+    exit()  
+
+def setup(robot_config, chat_handler):
+    global main_chat_handler
+    
+    # Any chat related setup code goes here
+
+
+    
+    # Add a reboot command to the extended chat commands
+    if robot_config.getboolean('tts', 'ext_chat'):
+        import extended_command
+        extended_command.add_command('.reboot', reboot)    
+    
+    main_chat_handler = chat_handler
+    
+    
+def handle_chat(args):
+
+    # Your custom chat handling code goes here
+    spokenText = 'internal_timed_info'
+    try:
+        spokenText = args['message']
+    except:
+        print('introduce yourself now')
+
+    response = getDialogResponse(spokenText)
+    responseText = response.query_result.fulfillment_text
+    responseIntent = response.query_result.intent.display_name
+    responseIntentEmtion = responseIntent.split("_",1)[1].lower()
+
+    if responseIntentEmtion == 'sceptic':
+        sceptic()
+    elif responseIntentEmtion == 'angry':
+        angry()
+    elif responseIntentEmtion == 'neutral':
+        neutral()
+    elif responseIntentEmtion == 'sad':
+        sad()
+
+
+    print('You said ' + spokenText)
+    print('intent: ' + responseIntent)
+    print('ted says: ' + responseText)
+    
+    say(responseText)
+
+    if responseIntentEmtion == 'frisky':
+        frisky()
+
+    angry()
+    time.sleep(0.2)
+    rightEyebrowServo.detach()
+    leftEyebrowServo.detach()
+     
+    # Call the main chat handler
+    main_chat_handler(args)
+
+
+
